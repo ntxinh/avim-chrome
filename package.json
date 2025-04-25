@@ -12,7 +12,8 @@
     "gscripts": "gulp scripts",
     "gstyles": "gulp styles",
     "gzip": "gulp zip",
-    "gdefault": "gulp default"
+    "gdefault": "gulp default",
+    "gulp": "gulp"
   },
   "repository": {
     "type": "git",

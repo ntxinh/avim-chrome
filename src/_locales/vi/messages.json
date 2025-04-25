@@ -54,5 +54,8 @@
 	"extPopupDemoCopy" : {
 		"message" : "Bôi đen toàn bộ",
 		"description" : ""
-	}
+	},
+  "extPopupDemoPlaceholder": {
+    "message": "Gõ nhanh tiếng Việt tại đây"
+  }
 }

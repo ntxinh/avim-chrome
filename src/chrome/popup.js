@@ -40,6 +40,9 @@ function loadText() {
   for (var k in keys) {
     $g('txt' + keys[k]).innerHTML = getI18n('extPopup' + keys[k]);
   }
+
+  // Set localized placeholder for inputDemo
+  $g("inputDemo").placeholder = getI18n("extPopupDemoPlaceholder");
 }
 
 function hightlightDemo() {
