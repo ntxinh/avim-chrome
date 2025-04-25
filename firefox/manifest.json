@@ -1,0 +1,39 @@
+{
+  "name": "__MSG_extName__",
+  "version": "0.8.5",
+  "manifest_version": 3,
+  "description": "__MSG_extDescription__",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_icon": "icons/icon19.png",
+    "default_title": "__MSG_extAction__",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [{
+    "js": ["scripts/avim.js", "scripts/extension.js"],
+    "matches": ["<all_urls>"],
+    "run_at": "document_idle",
+    "all_frames": true
+  }],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "default_locale": "en",
+  "background": {
+    "scripts": ["chrome/background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "599c4464-8a1a-4134-90c5-a4a5abbd3977@avim.firefox",
+      "strict_min_version": "109.0"
+    }
+  }
+}
