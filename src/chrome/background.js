@@ -1,143 +1,237 @@
-(function(window){
-	var localStorage = window.localStorage;
+async function setStorageItem(key, value) {
+  if (!chrome.storage || !chrome.storage.local) {
+    console.error('chrome.storage.local is undefined');
+    throw new Error('Storage API unavailable');
+  }
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [key]: value }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
 
-	function setLocalStorageItem(key, value) {
-	  if (localStorage)
-		localStorage[key] = value;
-	}
+async function getStorageItem(key) {
+  if (!chrome.storage || !chrome.storage.local) {
+    console.error('chrome.storage.local is undefined');
+    throw new Error('Storage API unavailable');
+  }
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get([key], (result) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(result[key]);
+      }
+    });
+  });
+}
 
-	function getLocalStorageItem(key) {
-	  if (localStorage)
-		return localStorage.getItem(key);
+async function getPrefs() {
+  const defaults = {
+    method: 1, // 1 = Telex only
+    onOff: 1,
+    ckSpell: 1,
+    oldAccent: 1,
+  };
 
-	  return ;
-	}
+  try {
+    const [method, onOff, ckSpell, oldAccent] = await Promise.all([
+      getStorageItem('method'),
+      getStorageItem('onOff'),
+      getStorageItem('ckSpell'),
+      getStorageItem('oldAccent'),
+    ]);
 
-	function getPrefs(callback) {
-		if (!getLocalStorageItem('method')) {
-			init();
-		}
-		var prefs = {
-			'method': parseInt(getLocalStorageItem('method')),
-			'onOff': parseInt(getLocalStorageItem('onOff')),
-			'ckSpell': parseInt(getLocalStorageItem('ckSpell')),
-			'oldAccent': parseInt(getLocalStorageItem('oldAccent'))
-		};
+    return {
+      method: method !== undefined ? parseInt(method) : defaults.method,
+      onOff: onOff !== undefined ? parseInt(onOff) : defaults.onOff,
+      ckSpell: ckSpell !== undefined ? parseInt(ckSpell) : defaults.ckSpell,
+      oldAccent:
+        oldAccent !== undefined ? parseInt(oldAccent) : defaults.oldAccent,
+    };
+  } catch (e) {
+    console.error('Error in getPrefs:', e);
+    return defaults;
+  }
+}
 
-		callback.call(this, prefs);
-	}
+async function turnAvim() {
+  try {
+    const onOff = await getStorageItem('onOff');
+    const newOnOff = onOff == '1' ? '0' : '1';
+    await setStorageItem('onOff', newOnOff);
+    const prefs = await getPrefs();
+    await updateAllTabs(prefs);
+  } catch (e) {
+    console.error('Error in turnAvim:', e);
+  }
+}
 
-	function turnAvim(callback) {
-		if (!getLocalStorageItem('method')) {
-			init();
-		}
+async function updateAllTabs(prefs) {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      // Only send messages to tabs with http or https URLs
+      if (
+        tab.url &&
+        (tab.url.startsWith('http://') || tab.url.startsWith('https://'))
+      ) {
+        try {
+          await chrome.tabs.sendMessage(tab.id, prefs);
+        } catch (e) {
+          console.warn(
+            `Could not send message to tab ${tab.id} (${tab.url}):`,
+            e.message
+          );
+        }
+      } else {
+        console.debug(
+          `Skipping tab ${tab.id}: Non-http/https URL (${tab.url || 'no URL'})`
+        );
+      }
+    }
+    await updateIcon(prefs);
+  } catch (e) {
+    console.error('Error in updateAllTabs:', e);
+  }
+}
 
-		var onOff = getLocalStorageItem('onOff');
-		setLocalStorageItem('onOff', onOff=='1'?'0':'1');
+async function updateIcon(prefs) {
+  try {
+    const txt = { text: prefs.onOff == 1 ? 'on' : 'off' };
+    const bg = {
+      color: prefs.onOff == 1 ? [0, 255, 0, 255] : [255, 0, 0, 255],
+    };
 
-		getPrefs(function(prefs){
-			updateAllTabs(prefs);
-			callback.call(this);
-		});
-	}
+    await chrome.action.setBadgeText(txt);
+    await chrome.action.setBadgeBackgroundColor(bg);
+  } catch (e) {
+    console.error('Error in updateIcon:', e);
+  }
+}
 
-	function updateAllTabs(prefs) {
-		chrome.tabs.query({}, function(tabs){
-			for (var i=0; i<tabs.length; i++) {
-				var tab = tabs[i];
-				chrome.tabs.sendMessage(tab.id, prefs);
-			}
-		});
+async function savePrefs(request) {
+  try {
+    if (typeof request.method !== 'undefined') {
+      await setStorageItem('method', request.method);
+    }
+    if (typeof request.onOff !== 'undefined') {
+      await setStorageItem('onOff', request.onOff);
+    }
+    if (typeof request.ckSpell !== 'undefined') {
+      await setStorageItem('ckSpell', request.ckSpell);
+    }
+    if (typeof request.oldAccent !== 'undefined') {
+      await setStorageItem('oldAccent', request.oldAccent);
+    }
 
-		updateIcon(prefs);
-	}
+    const prefs = await getPrefs();
+    await updateAllTabs(prefs);
+  } catch (e) {
+    console.error('Error in savePrefs:', e);
+  }
+}
 
-	function updateIcon(prefs) {
-		var txt = {};
-		var bg = {};
+function processRequest(request, sender, sendResponse) {
+  if (request.get_prefs) {
+    getPrefs()
+      .then((prefs) => sendResponse(prefs))
+      .catch((e) => {
+        console.error('Error processing get_prefs:', e);
+        sendResponse({ error: e.message });
+      });
+    return true;
+  }
 
-		if (prefs.onOff == 1) {
-			txt.text = "on";
-			bg.color = [0, 255, 0, 255];
-		} else {
-			txt.text = "off";
-			bg.color = [255, 0, 0, 255];
-		}
+  if (request.save_prefs) {
+    savePrefs(request)
+      .then(() => sendResponse({}))
+      .catch((e) => {
+        console.error('Error processing save_prefs:', e);
+        sendResponse({ error: e.message });
+      });
+    return true;
+  }
 
-		chrome.browserAction.setBadgeText(txt);
-		chrome.browserAction.setBadgeBackgroundColor(bg);
-	}
+  if (request.turn_avim) {
+    turnAvim()
+      .then(() => sendResponse({}))
+      .catch((e) => {
+        console.error('Error processing turn_avim:', e);
+        sendResponse({ error: e.message });
+      });
+    return true;
+  }
+}
 
-	function savePrefs(request, callback) {
-		if (typeof request.method != 'undefined') {
-			setLocalStorageItem("method", request.method);
-		}
-		if (typeof request.onOff != 'undefined') {
-			setLocalStorageItem("onOff", request.onOff);
-		}
-		if (typeof request.ckSpell != 'undefined') {
-			setLocalStorageItem("ckSpell", request.ckSpell);
-		}
-		if (typeof request.oldAccent != 'undefined') {
-			setLocalStorageItem("oldAccent", request.oldAccent);
-		}
+function genericOnClick(info, tab) {
+  console.log('AVIM Demo clicked:', info, tab);
+}
 
-		getPrefs(function(prefs){
-			updateAllTabs(prefs);
-			callback.call(this);
-		});
-	}
+function createMenus() {
+  if (!chrome.contextMenus) {
+    console.warn('chrome.contextMenus is undefined; skipping menu creation');
+    return;
+  }
+  chrome.contextMenus.create({
+    id: 'avim-parent',
+    title: 'AVIM',
+    contexts: ['selection'],
+  });
+  chrome.contextMenus.create({
+    id: 'avim-demo',
+    title: 'AVIM Demo',
+    contexts: ['selection'],
+    parentId: 'avim-parent',
+  });
+}
 
-	function processRequest(request, sender, sendResponse) {
-		if (request.get_prefs) {
-			getPrefs(sendResponse);
-			return;
-		}
+async function init() {
+  try {
+    console.log('Initializing background script');
+    const prefs = await getPrefs();
+    const defaults = { method: 0, onOff: 1, ckSpell: 1, oldAccent: 1 };
 
-		if (request.save_prefs) {
-			savePrefs(request, sendResponse);
-			return;
-		}
+    // Set defaults if not already set
+    if (prefs.method === undefined)
+      await setStorageItem('method', defaults.method);
+    if (prefs.onOff === undefined)
+      await setStorageItem('onOff', defaults.onOff);
+    if (prefs.ckSpell === undefined)
+      await setStorageItem('ckSpell', defaults.ckSpell);
+    if (prefs.oldAccent === undefined)
+      await setStorageItem('oldAccent', defaults.oldAccent);
 
-		if (request.turn_avim) {
-			turnAvim(sendResponse);
-			return;
-		}
-	}
+    await updateIcon(prefs);
 
-	function genericOnClick() {
-		alert("demo");
-	}
+    // Register context menu click handler only if contextMenus API is available
+    if (chrome.contextMenus && chrome.contextMenus.onClicked) {
+      chrome.contextMenus.onClicked.addListener((info, tab) => {
+        if (info.menuItemId === 'avim-demo') {
+          genericOnClick(info, tab);
+        }
+      });
+      // Uncomment to enable context menus (requires "contextMenus" permission)
+      // createMenus();
+    } else {
+      console.warn(
+        'chrome.contextMenus.onClicked is undefined; skipping listener registration'
+      );
+    }
+  } catch (e) {
+    console.error('Error in init:', e);
+  }
+}
 
-	function createMenus() {
-		var parentId = chrome.contextMenus.create({"title" : "AVIM", "contexts" : ["selection"]});
-		var demo = chrome.contextMenus.create({"title" : "AVIM Demo", "contexts" : ["selection"], "parentId": parentId, "onclick": genericOnClick});
-	}
+// Register message listener
+chrome.runtime.onMessage.addListener(processRequest);
 
-	function init() {
-		if (!getLocalStorageItem('method')) {
-			setLocalStorageItem('method', '0');
-		}
-
-		if (!getLocalStorageItem('onOff')) {
-			setLocalStorageItem('onOff', '1');
-		}
-
-		if (!getLocalStorageItem('ckSpell')) {
-			setLocalStorageItem('ckSpell', '1');
-		}
-
-		if (!getLocalStorageItem('oldAccent')) {
-			setLocalStorageItem('oldAccent', '1');
-		}
-
-		getPrefs(updateIcon);
-
-		chrome.extension.onMessage.addListener(processRequest);
-
-		//createMenus();
-	}
-
-	init();
-
-})(window);
+// Initialize on extension install or update
+chrome.runtime.onInstalled.addListener(() => {
+  console.log('Extension installed or updated');
+  init();
+});

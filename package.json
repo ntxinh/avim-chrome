@@ -3,18 +3,27 @@
   "version": "0.7.0",
   "description": "avim-chrome ===========",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "gclean": "gulp clean",
+    "gcopy": "gulp copy",
+    "ghtml": "gulp html",
+    "gjshint": "gulp jshint",
+    "gtest": "gulp test",
+    "gscripts": "gulp scripts",
+    "gstyles": "gulp styles",
+    "gzip": "gulp zip",
+    "gdefault": "gulp default"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/kimkha/avim-chrome"
+    "url": "https://github.com/ntxinh/avim-chrome"
   },
-  "author": "Nguyen Kim Kha <nkimkha@gmail.com>",
-  "license": "GPLv3",
+  "author": "ntxinh <nguyentrucxjnh@gmail.com>",
+  "license": "MIT",
   "bugs": {
-    "url": "https://github.com/kimkha/avim-chrome/issues"
+    "url": "https://github.com/ntxinh/avim-chrome/issues"
   },
-  "homepage": "https://github.com/kimkha/avim-chrome",
+  "homepage": "https://github.com/ntxinh/avim-chrome",
   "devDependencies": {
     "del": "^6.0.0",
     "gulp": "^4.0.2",
